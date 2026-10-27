@@ -39,8 +39,8 @@ export async function loginUser(phone, password) {
   }
 }
 
-// ---- REGISTER (admin creates user) ----
-export async function registerUser(name, phone, password, role = "user") {
+// ---- REGISTER (admin creates user with full profile) ----
+export async function registerUser(name, phone, password, role = "user", extra = {}) {
   try {
     const email = phoneToEmail(phone);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -48,13 +48,28 @@ export async function registerUser(name, phone, password, role = "user") {
 
     await updateProfile(user, { displayName: name });
 
-    await setDoc(doc(db, "users", user.uid), {
+    const profile = {
       name,
       phone,
       role,
       status: "active",
+      // extra profile fields from the admin form
+      fatherName: extra.fatherName || "",
+      motherName: extra.motherName || "",
+      dateOfBirth: extra.dateOfBirth || "",
+      gender: extra.gender || "",
+      bloodGroup: extra.bloodGroup || "",
+      nid: extra.nid || "",
+      occupation: extra.occupation || "",
+      address: extra.address || "",
+      district: extra.district || "",
+      emergencyContact: extra.emergencyContact || "",
+      joiningDate: extra.joiningDate || "",
+      notes: extra.notes || "",
       createdAt: serverTimestamp(),
-    });
+    };
+
+    await setDoc(doc(db, "users", user.uid), profile);
 
     return { success: true, user };
   } catch (error) {
@@ -67,7 +82,6 @@ export async function registerUser(name, phone, password, role = "user") {
     return { success: false, message };
   }
 }
-
 // ---- LOGOUT ----
 export async function logoutUser() {
   try {

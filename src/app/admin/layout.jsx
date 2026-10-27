@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { logoutUser, getUserData } from "@/lib/auth";
-import { isAdminRole, can } from "@/lib/roles";
+import { getAdminData, logoutAdmin } from "@/lib/admin/auth";
+import { canAdmin, isAdminRole, isSuperAdmin } from "@/lib/admin/roles";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: "🏠", resource: null },
   { href: "/admin/users", label: "Users", icon: "👥", resource: "users", action: "read" },
-  { href: "/admin/users/add", label: "Add User", icon: "➕", resource: "users", action: "create" },
+  { href: "/admin/users/add", label: "Register User", icon: "➕", resource: "users", action: "create" },
+  { href: "/admin/admins", label: "Admins", icon: "🛡️", resource: "admins", action: "read" },
+  { href: "/admin/admins/add", label: "Add Admin", icon: "🔐", resource: "admins", action: "create" },
   { href: "/admin/donations", label: "Donations", icon: "💰", resource: "donations", action: "read" },
   { href: "/admin/expenses", label: "Expenses", icon: "🧾", resource: "expenses", action: "read" },
   { href: "/admin/funds", label: "Funds", icon: "🏦", resource: "funds", action: "read" },
@@ -25,11 +27,9 @@ export default function AdminLayout({ children }) {
   const [role, setRole] = useState(null);
   const [checking, setChecking] = useState(true);
   const [noDoc, setNoDoc] = useState(false);
-  const resolvedRef = useRef(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      resolvedRef.current = false;
       setUser(u);
 
       if (!u) {
@@ -40,24 +40,19 @@ export default function AdminLayout({ children }) {
         return;
       }
 
-      const res = await getUserData(u.uid);
-      const userRole = res.success ? res.data.role : null;
-      setRole(userRole);
+      const res = await getAdminData(u.uid);
+      const adminRole = res.success ? res.data.role : null;
+      setRole(adminRole);
       setNoDoc(!res.success);
       setChecking(false);
-      resolvedRef.current = true;
 
-      // If on login page but already authenticated as admin, go to dashboard.
-      // If authenticated but NOT admin, stay on login (or show error) — do NOT bounce.
       if (pathname === "/admin/login") {
-        if (isAdminRole(userRole)) {
-          router.replace("/admin");
-        }
+        if (isAdminRole(adminRole)) router.replace("/admin");
         return;
       }
 
-      // Protected pages: if not admin (or no doc), go to login
-      if (!isAdminRole(userRole)) {
+      if (!isAdminRole(adminRole)) {
+        // authenticated via Firebase Auth but not in admins collection
         router.replace("/admin/login");
       }
     });
@@ -65,7 +60,9 @@ export default function AdminLayout({ children }) {
   }, [pathname, router]);
 
   const handleLogout = async () => {
-    await logoutUser();
+    window.localStorage.removeItem("admin_phone");
+    window.sessionStorage.removeItem("admin_pass");
+    await logoutAdmin();
     router.replace("/admin/login");
   };
 
@@ -81,7 +78,6 @@ export default function AdminLayout({ children }) {
 
   if (!user) return null;
 
-  // Authenticated but has no admin role → show a clear message instead of looping
   if (!isAdminRole(role)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-emerald-50 px-4">
@@ -89,8 +85,8 @@ export default function AdminLayout({ children }) {
           <p className="text-lg font-bold text-red-700">Access Denied</p>
           <p className="mt-2 text-sm text-slate-600">
             {noDoc
-              ? "Your account has no Firestore user document, or it is missing the 'role' field."
-              : "Your account does not have admin access."}
+              ? "This account is not registered in the admins collection."
+              : "You do not have admin access."}
           </p>
           <button
             onClick={handleLogout}
@@ -104,7 +100,7 @@ export default function AdminLayout({ children }) {
   }
 
   const visibleNav = navItems.filter(
-    (item) => !item.resource || can(role, item.resource, item.action || "read")
+    (item) => !item.resource || canAdmin(role, item.resource, item.action || "read")
   );
 
   return (
@@ -117,12 +113,12 @@ export default function AdminLayout({ children }) {
           <div>
             <p className="text-sm font-bold text-slate-900">Shapnochura</p>
             <p className="text-xs text-slate-500">
-              {role === "super_admin" ? "Super Admin" : "Admin Panel"}
+              {isSuperAdmin(role) ? "Super Admin" : "Admin Panel"}
             </p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {visibleNav.map((item) => {
             const active =
               item.href === "/admin"
@@ -150,7 +146,7 @@ export default function AdminLayout({ children }) {
             {role?.replace("_", " ") || "unknown"}
           </p>
           <p className="mb-2 truncate px-2 text-xs text-slate-500">
-            {user.email?.replace("@shapnochura.local", "") || user.displayName}
+            {user.email?.replace("@admin.shapnochura.local", "")}
           </p>
           <button
             onClick={handleLogout}

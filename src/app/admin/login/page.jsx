@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginUser } from "@/lib/auth";
+import { loginAdmin } from "@/lib/admin/auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -25,7 +25,9 @@ export default function AdminLoginPage() {
       return;
     }
     setSubmitting(true);
-    const result = await loginUser(formData.phone, formData.password);
+
+    const result = await loginAdmin(formData.phone, formData.password);
+
     if (result.success) {
       window.localStorage.setItem("admin_phone", formData.phone);
       window.sessionStorage.setItem("admin_pass", formData.password);
@@ -47,7 +49,7 @@ export default function AdminLoginPage() {
             Shapnochura Admin
           </h1>
           <p className="text-xs font-medium text-slate-500">
-            Sign in to manage the foundation
+            Sign in with your admin phone number
           </p>
         </div>
 
@@ -64,7 +66,7 @@ export default function AdminLoginPage() {
           <div className="grid gap-4">
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">
-                Phone Number
+                Admin Phone Number
               </label>
               <div className="flex items-center rounded-lg border border-slate-300 focus-within:border-emerald-600">
                 <span className="border-r border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500">

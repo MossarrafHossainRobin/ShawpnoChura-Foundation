@@ -6,15 +6,31 @@ import { useRouter } from "next/navigation";
 import { registerUser, loginUser, getCurrentUserRole } from "@/lib/auth";
 import { isSuperAdminRole } from "@/lib/roles";
 
+const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+
 export default function AdminAddUserPage() {
   const router = useRouter();
   const [myRole, setMyRole] = useState(null);
+
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     password: "",
     role: "user",
+    fatherName: "",
+    motherName: "",
+    dateOfBirth: "",
+    gender: "",
+    bloodGroup: "",
+    nid: "",
+    occupation: "",
+    address: "",
+    district: "",
+    emergencyContact: "",
+    joiningDate: "",
+    notes: "",
   });
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState("");
@@ -37,8 +53,12 @@ export default function AdminAddUserPage() {
     setMessage("");
     setSuccess("");
 
+    if (!formData.name.trim()) {
+      setMessage("Full name is required.");
+      return;
+    }
     if (!isValidPhone(formData.phone)) {
-      setMessage("Enter a valid 11-digit BD number.");
+      setMessage("Enter a valid 11-digit BD number (e.g. 01712345678).");
       return;
     }
     if (formData.password.length < 6) {
@@ -51,12 +71,9 @@ export default function AdminAddUserPage() {
     const adminPhone = window.localStorage.getItem("admin_phone");
     const adminPass = window.sessionStorage.getItem("admin_pass");
 
-    const result = await registerUser(
-      formData.name,
-      formData.phone,
-      formData.password,
-      formData.role
-    );
+    const { name, phone, password, role, ...extra } = formData;
+
+    const result = await registerUser(name, phone, password, role, extra);
 
     if (!result.success) {
       setMessage(result.message || "Failed to create user.");
@@ -64,13 +81,30 @@ export default function AdminAddUserPage() {
       return;
     }
 
-    setSuccess(
-      `User "${formData.name}" (${formData.phone}) created successfully.`
-    );
+    setSuccess(`User "${name}" (${phone}) registered successfully.`);
 
+    // Restore the admin session (creating a user kicks us out)
     if (adminPhone && adminPass) await loginUser(adminPhone, adminPass);
 
-    setFormData({ name: "", phone: "", password: "", role: "user" });
+    // Reset the form
+    setFormData({
+      name: "",
+      phone: "",
+      password: "",
+      role: "user",
+      fatherName: "",
+      motherName: "",
+      dateOfBirth: "",
+      gender: "",
+      bloodGroup: "",
+      nid: "",
+      occupation: "",
+      address: "",
+      district: "",
+      emergencyContact: "",
+      joiningDate: "",
+      notes: "",
+    });
     setSubmitting(false);
   };
 
@@ -79,14 +113,14 @@ export default function AdminAddUserPage() {
     : ["user", "volunteer", "accountant"];
 
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className="mx-auto w-full max-w-3xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-950">
-            Add New User
+            Register New User
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Create an account with a Bangladesh phone number and password.
+            Create an account and fill in the full profile for this member.
           </p>
         </div>
         <Link
@@ -112,11 +146,9 @@ export default function AdminAddUserPage() {
           </div>
         )}
 
-        <div className="grid gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
-              Full Name
-            </label>
+        {/* ---- ACCOUNT SECTION ---- */}
+        <Section title="Account Information">
+          <Field label="Full Name" required>
             <input
               type="text"
               name="name"
@@ -124,14 +156,11 @@ export default function AdminAddUserPage() {
               onChange={handleChange}
               required
               placeholder="e.g. Md. Nasir Sardar"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+              className="input"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
-              Phone Number
-            </label>
+          <Field label="Phone Number" required>
             <div className="flex items-center rounded-lg border border-slate-300 focus-within:border-emerald-600">
               <span className="border-r border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500">
                 🇧🇩 +880
@@ -148,12 +177,9 @@ export default function AdminAddUserPage() {
                 className="w-full rounded-r-lg px-3 py-2 text-sm outline-none"
               />
             </div>
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
-              Password
-            </label>
+          <Field label="Password" required>
             <input
               type="password"
               name="password"
@@ -162,19 +188,16 @@ export default function AdminAddUserPage() {
               required
               minLength={6}
               placeholder="At least 6 characters"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+              className="input"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
-              Role
-            </label>
+          <Field label="Role">
             <select
               name="role"
               value={formData.role}
               onChange={handleChange}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm capitalize outline-none focus:border-emerald-600"
+              className="input capitalize"
             >
               {roleOptions.map((r) => (
                 <option key={r} value={r}>
@@ -182,17 +205,186 @@ export default function AdminAddUserPage() {
                 </option>
               ))}
             </select>
-          </div>
-        </div>
+          </Field>
+        </Section>
+
+        {/* ---- PERSONAL SECTION ---- */}
+        <Section title="Personal Information">
+          <Field label="Father's Name">
+            <input
+              type="text"
+              name="fatherName"
+              value={formData.fatherName}
+              onChange={handleChange}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Mother's Name">
+            <input
+              type="text"
+              name="motherName"
+              value={formData.motherName}
+              onChange={handleChange}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Date of Birth">
+            <input
+              type="date"
+              name="dateOfBirth"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Gender">
+            <select
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">Select…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+
+          <Field label="Blood Group">
+            <select
+              name="bloodGroup"
+              value={formData.bloodGroup}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">Select…</option>
+              {BLOOD_GROUPS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="NID Number">
+            <input
+              type="text"
+              name="nid"
+              value={formData.nid}
+              onChange={handleChange}
+              placeholder="10 or 17 digits"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Occupation">
+            <input
+              type="text"
+              name="occupation"
+              value={formData.occupation}
+              onChange={handleChange}
+              placeholder="e.g. Teacher, Student, Farmer"
+              className="input"
+            />
+          </Field>
+        </Section>
+
+        {/* ---- ADDRESS SECTION ---- */}
+        <Section title="Address & Contact">
+          <Field label="Address" className="sm:col-span-2">
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
+              placeholder="Village / Road / House"
+              className="input"
+            />
+          </Field>
+
+          <Field label="District">
+            <input
+              type="text"
+              name="district"
+              value={formData.district}
+              onChange={handleChange}
+              placeholder="e.g. Feni"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Emergency Contact">
+            <input
+              type="tel"
+              name="emergencyContact"
+              value={formData.emergencyContact}
+              onChange={handleChange}
+              placeholder="01XXXXXXXXX"
+              maxLength={11}
+              className="input"
+            />
+          </Field>
+        </Section>
+
+        {/* ---- MEMBERSHIP SECTION ---- */}
+        <Section title="Membership">
+          <Field label="Joining Date">
+            <input
+              type="date"
+              name="joiningDate"
+              value={formData.joiningDate}
+              onChange={handleChange}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Notes" className="sm:col-span-2">
+            <textarea
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Any extra information about this member"
+              className="input"
+            />
+          </Field>
+        </Section>
 
         <button
           type="submit"
           disabled={submitting}
           className="mt-6 w-full rounded-lg bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:opacity-60"
         >
-          {submitting ? "Creating user..." : "Create User"}
+          {submitting ? "Registering..." : "Register User"}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ---- Small helper components (keep at the bottom of the same file) ----
+function Section({ title, children }) {
+  return (
+    <div className="mb-8">
+      <h2 className="mb-4 border-b border-slate-200 pb-2 text-sm font-bold uppercase tracking-wide text-emerald-700">
+        {title}
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, required, className = "", children }) {
+  return (
+    <div className={className}>
+      <label className="mb-1 block text-sm font-semibold text-slate-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
     </div>
   );
 }
